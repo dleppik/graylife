@@ -90,13 +90,13 @@
                 return 0;
             }
             const dist = sum-3;
-            return 1 - (dist*dist);
+            return 1 - Math.abs(dist);
         }
         if (sum < 1.5 || sum > 3.5) {
             return 0;
         }
         const dist = (sum - 2) / 2;
-        return 1 - (dist*dist);
+        return 1 - Math.abs(dist);
     }
 
     let algorithms = {
