@@ -34,6 +34,7 @@
     <button id="StepControl">Step</button>
     <button id="FillRandomControl">Fill random</button>
     <button id="ClearControl">Clear</button>
+    <select id="AlgorithmControl"></select>
 
     <div style="margin-top: 1em">
         <div id="ColorPicker">
@@ -64,18 +65,12 @@
     let boardHeight = 25;
     let boardScale = 10;
 
-    // Graylife function: return (don't set) a new value
+    // Game of Life functions: return (don't set) a new value
 
-    function newCellValue(x, y) {
-        return simpleLife(x, y);
-    }
-
-    function simpleLife(x, y) {
+    const simpleLife = (x, y) => {
         const neighbors = cellNeighbors(x, y);
         let sum = 0;
-        neighbors.forEach(v => {
-            sum += Math.round(v);
-        });
+        neighbors.forEach(value => {sum += Math.round(value);});
         if (sum === 3) {
             return 1;
         }
@@ -85,6 +80,32 @@
         return 0;
     }
 
+    const smooth1 = (x, y) => {
+        const neighbors = cellNeighbors(x, y);
+        let sum = 0;
+        neighbors.forEach(value => {sum += value});
+
+        if (cellValue(x, y) <= 0) {
+            if (sum < 2.5 || sum > 3.5) {
+                return 0;
+            }
+            const dist = sum-3;
+            return 1 - (dist*dist);
+        }
+        if (sum < 1.5 || sum > 3.5) {
+            return 0;
+        }
+        const dist = (sum - 2) / 2;
+        return 1 - (dist*dist);
+    }
+
+    let algorithms = {
+        "Conway's Life": simpleLife,
+        "Smooth": smooth1
+    }
+
+    let algorithmName = "Conway's Life";
+    let newCellValue = algorithms[algorithmName];
 
     // Simulator
 
@@ -97,9 +118,13 @@
     function setCurrentValue(x, y, value) { grid[cellIndex(x, y)] = value }
 
     function cellNeighbor(cellX, cellY, dx, dy) {
-        const x = (cellX + dx) % boardWidth;
-        const y = (cellY + dy) % boardHeight;
+        const x = mod(cellX + dx, boardWidth);
+        const y = mod(cellY + dy, boardHeight);
         return cellValue(x, y);
+    }
+
+    function mod(n, m) {
+        return ((n % m) + m) % m;
     }
 
     function cellNeighbors(x, y) {
@@ -178,7 +203,8 @@
         fillRandom();
         drawBoard();
 
-        initColorPicker(5);
+        initColorPicker(9);
+        initAlgorithmSelector();
 
         document.getElementById("StepControl").addEventListener('click', step);
         document.getElementById("FillRandomControl").addEventListener('click', () => {
@@ -191,6 +217,36 @@
         });
 
         canvas.addEventListener('click', pickColor);
+    }
+
+    function selectAlgorithm(name) {
+        const a = algorithms[name];
+        if (!a) {
+            alert("Unknown algorithm: "+name);
+            return;
+        }
+        algorithmName = name;
+        newCellValue = a;
+
+        const el = document.getElementById("AlgorithmControl");
+        Array.of(el.children).forEach((opt, i) => {
+            if (opt.value === name) {
+                el.selectedIndex = i;
+            }
+        });
+    }
+
+    function initAlgorithmSelector() {
+        let html = "";
+        Object.keys(algorithms).sort().forEach(name => {
+            html += `<option value="${name}">${name}</option>`;
+        });
+        const el = document.getElementById("AlgorithmControl");
+        el.innerHTML = html;
+        el.onchange = (e) => {
+            selectAlgorithm(e.target.value);
+        };
+        selectAlgorithm(algorithmName);
     }
 
     function pickColor(event) {
