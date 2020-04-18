@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Graylife</title>
+
+    <style>
+        body {
+            font-family: "Helvetica Neue", "Helvetica", "Arial", sans-serif;
+        }
+        .pickCell {
+            width: 16px;
+            height: 16px;
+            border: 1px solid black;
+            padding: 1px;
+            margin: 1px;
+            display: inline-block;
+        }
+        .pickCell.color-picker-selected {
+            padding: 0;
+            border: 2px solid yellow;
+            box-shadow: 0 1px 2px blue;
+        }
+    </style>
+
+</head>
+<body>
+<h1>Graylife</h1>
+<h4>An extension of Conway’s Game of Life into grayscale</h4>
+
+<canvas id="LifeBoard"></canvas>
+
+<div id="LifeControls">
+    <button id="StepControl">Step</button>
+    <button id="FillRandomControl">Fill random</button>
+    <button id="ClearControl">Clear</button>
+
+    <div style="margin-top: 1em">
+        <div id="ColorPicker">
+        </div>
+    </div>
+
+</div>
+
+<div id="description">
+    <p>Conway’s Rules</p>
+    <ul>
+        <li>Any cell with 3 live neighbors is alive in the next round</li>
+        <li>A living cell with 2 live neighbors stays alive in the next round</li>
+        <li>All other cells will be dead.</li>
+    </ul>
+
+    <p>Graylife extensions</p>
+    <ul>
+        <li>Rather than live (1) or dead (0), cells may be in a range from 0 to 1</li>
+        <li><i>If all cells are 0 or 1, the rules are identical to Conway’s.</i></li>
+        <li>Beyond that, I’m playing around with different interpolations. Check the source code for details.</li>
+    </ul>
+</div>
+
+<script>
+
+    let boardWidth = 50;
+    let boardHeight = 25;
+    let boardScale = 10;
+
+    // Graylife function: return (don't set) a new value
+
+    function newCellValue(x, y) {
+        return simpleLife(x, y);
+    }
+
+    function simpleLife(x, y) {
+        const neighbors = cellNeighbors(x, y);
+        let sum = 0;
+        neighbors.forEach(v => {
+            sum += Math.round(v);
+        });
+        if (sum === 3) {
+            return 1;
+        }
+        if (sum === 2 && Math.round(cellValue(x, y)) === 1) {
+            return 1;
+        }
+        return 0;
+    }
+
+
+    // Simulator
+
+    let grid = new Float32Array(boardWidth*boardHeight);
+    let nextGrid = new Float32Array(boardWidth*boardHeight);
+
+    function cellIndex(x, y) { return (y * boardWidth) + x; }
+    function cellValue(x, y) { return grid[cellIndex(x, y)] }
+    function setNextValue(x, y, value) { nextGrid[cellIndex(x, y)] = value }
+    function setCurrentValue(x, y, value) { grid[cellIndex(x, y)] = value }
+
+    function cellNeighbor(cellX, cellY, dx, dy) {
+        const x = (cellX + dx) % boardWidth;
+        const y = (cellY + dy) % boardHeight;
+        return cellValue(x, y);
+    }
+
+    function cellNeighbors(x, y) {
+        return [
+            cellNeighbor(x, y, -1, -1),
+            cellNeighbor(x, y, -1,  0),
+            cellNeighbor(x, y, -1,  1),
+            cellNeighbor(x, y,  0, -1),
+            cellNeighbor(x, y,  0,  1),
+            cellNeighbor(x, y,  1, -1),
+            cellNeighbor(x, y,  1,  0),
+            cellNeighbor(x, y,  1,  1),
+        ];
+    }
+
+    function update(cellFunction) {
+        if (!cellFunction) {
+            cellFunction = newCellValue;
+        }
+
+        for (let x=0; x<boardWidth; x++) {
+            for (let y=0; y<boardHeight; y++) {
+                setNextValue(x, y, cellFunction(x, y));
+            }
+        }
+        const swap = grid;
+        grid = nextGrid;
+        nextGrid = swap;
+    }
+
+    function fillRandom() { update(() => Math.random()) }
+    function clearBoard() { update(() => 0) }
+
+    // UI
+
+    let canvas = null;
+    let context = null;
+
+    function step() {
+        update();
+        drawBoard();
+    }
+
+    function drawBoard() {
+        context.fillStyle = 'black';
+        context.fill();
+
+        context.imageSmoothingEnabled = false;
+        for (let x=0; x < boardWidth; x++) {
+            for (let y=0; y < boardHeight; y++) {
+                drawPixel(cellValue(x, y), x, y);
+            }
+        }
+    }
+
+    function pixelStyle(value) {
+        const color = 255 - Math.round(value * 255);
+        return `rgb(${color}, ${color}, ${color})`;
+    }
+
+    function valueForColor(redValue) { return (255 - redValue) / 255; }
+
+    function drawPixel(value, x, y) {
+        context.fillStyle = pixelStyle(value);
+        context.fillRect(x*boardScale, y*boardScale, boardScale-1, boardScale-1);
+    }
+
+    // Init
+
+    function initLife() {
+        canvas = document.getElementById("LifeBoard");
+        canvas.width = boardWidth * boardScale;
+        canvas.height = boardHeight * boardScale;
+        context = canvas.getContext('2d');
+
+        fillRandom();
+        drawBoard();
+
+        initColorPicker(5);
+
+        document.getElementById("StepControl").addEventListener('click', step);
+        document.getElementById("FillRandomControl").addEventListener('click', () => {
+            fillRandom();
+            drawBoard();
+        });
+        document.getElementById("ClearControl").addEventListener('click', () => {
+            clearBoard();
+            drawBoard();
+        });
+
+        canvas.addEventListener('click', pickColor);
+    }
+
+    function pickColor(event) {
+        const pickEl = document.getElementsByClassName("color-picker-selected")[0];
+        const value = Number(pickEl.dataset.value);
+        const x = Math.floor(event.offsetX  / boardScale);
+        const y = Math.floor(event.offsetY  / boardScale);
+        setCurrentValue(x, y, value);
+        drawBoard();
+    }
+
+    function initColorPicker(numColors) {
+        const picker = document.getElementById("ColorPicker");
+        picker.innerHTML = "";
+        for (let i=0; i<numColors; i++) {
+            let value =  i / (numColors-1);
+            picker.innerHTML += `<div class="pickCell" data-value="${value}" style="background: ${pixelStyle(value)}"></div>`;
+        }
+        picker.lastElementChild.classList.add("color-picker-selected");
+
+        picker.childNodes.forEach(el => {
+            el.onclick = () => {
+                Array.from(document.getElementsByClassName("color-picker-selected")).forEach(old => {
+                    old.classList.remove("color-picker-selected");
+                })
+                el.classList.add("color-picker-selected");
+            }
+        })
+    }
+
+    initLife();
+
+</script>
+
+</body>
+</html>
