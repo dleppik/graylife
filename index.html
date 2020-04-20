@@ -43,6 +43,8 @@
     <button id="FillRandomControl">Fill random</button>
     <button id="ClearControl">Clear</button>
     <select id="AlgorithmControl"></select>
+    <label><input id="GridControl" type="checkbox">Grid</label>
+
 
     <div style="margin-top: 1em">
         <div id="ColorPicker">
@@ -72,7 +74,7 @@
     let boardWidth = 200;
     let boardHeight = 100;
     let boardScale = 5;
-    let gridColor = null; //'#eef'; // Use null for no grid
+    let gridColor = null;
 
     // Game of Life functions: return (don't set) a new value
 
@@ -147,13 +149,13 @@
 
     // Simulator
 
-    let grid = new Float32Array(boardWidth*boardHeight);
-    let nextGrid = new Float32Array(boardWidth*boardHeight);
+    let board = new Float32Array(boardWidth*boardHeight);
+    let nextBoard = new Float32Array(boardWidth*boardHeight);
 
     function cellIndex(x, y) { return (y * boardWidth) + x; }
-    function cellValue(x, y) { return grid[cellIndex(x, y)] }
-    function setNextValue(x, y, value) { nextGrid[cellIndex(x, y)] = value }
-    function setCurrentValue(x, y, value) { grid[cellIndex(x, y)] = value }
+    function cellValue(x, y) { return board[cellIndex(x, y)] }
+    function setNextValue(x, y, value) { nextBoard[cellIndex(x, y)] = value }
+    function setCurrentValue(x, y, value) { board[cellIndex(x, y)] = value }
 
     function cellNeighbor(cellX, cellY, dx, dy) {
         const x = mod(cellX + dx, boardWidth);
@@ -188,9 +190,9 @@
                 setNextValue(x, y, cellFunction(x, y));
             }
         }
-        const swap = grid;
-        grid = nextGrid;
-        nextGrid = swap;
+        const swap = board;
+        board = nextBoard;
+        nextBoard = swap;
     }
 
     function fillRandom() { update(() => Math.random()) }
@@ -200,6 +202,8 @@
 
     let canvas = null;
     let context = null;
+    let boardImage = null;
+    let boardScalingCanvas = document.createElement("canvas");
     let running = null;
     let runDelayMillis = 100;
 
@@ -225,15 +229,37 @@
     }
 
     function drawBoard() {
-        if (gridColor) {
-            context.fillStyle = gridColor;
-            context.fillRect(0, 0, canvas.width, canvas.height);
+        if (boardImage === null) {
+            boardImage = context.createImageData(boardWidth, boardHeight);
+            for (let i=0; i< boardImage.data.length; i++) {
+                boardImage.data[i] = 255;
+            }
+            boardScalingCanvas.width = boardWidth;
+            boardScalingCanvas.height = boardHeight;
         }
 
         for (let x=0; x < boardWidth; x++) {
             for (let y=0; y < boardHeight; y++) {
                 drawPixel(cellValue(x, y), x, y);
             }
+        }
+
+        boardScalingCanvas.getContext("2d").putImageData(boardImage, 0, 0);
+        context.imageSmoothingEnabled = false;
+        context.drawImage(boardScalingCanvas, 0, 0, canvas.width, canvas.height);
+
+        if (gridColor) {
+            context.strokeStyle = gridColor;
+            context.beginPath();
+            for (let x=0.5; x< canvas.width; x+= boardScale) {  // 0.5: half pixel to avoid antialiasing
+                context.moveTo(x, 0);
+                context.lineTo(x, canvas.height);
+            }
+            for (let y=0.5; y < canvas.height; y+= boardScale) {  // 0.5: half pixel to avoid antialiasing
+                context.moveTo(0, y);
+                context.lineTo(canvas.width, y);
+            }
+            context.stroke();
         }
     }
 
@@ -243,9 +269,11 @@
     }
 
     function drawPixel(value, x, y) {
-        const size = gridColor ? boardScale - 1 : boardScale;
-        context.fillStyle = pixelStyle(value);
-        context.fillRect(x*boardScale, y*boardScale, size, size);
+        const color = 255 - Math.round(value * 255);
+        let i = y * (boardWidth * 4) + x * 4;
+        boardImage.data[i] = color;
+        boardImage.data[i+1] = color;
+        boardImage.data[i+2] = color;
     }
 
     // Init
@@ -266,7 +294,7 @@
             stop();
             step();
         });
-        document.getElementById("RunControl").addEventListener('click', function() {
+        document.getElementById("RunControl").addEventListener('click', () => {
             if (running) {
                 stop();
             }
@@ -282,6 +310,10 @@
             clearBoard();
             drawBoard();
         });
+        document.getElementById("GridControl").addEventListener('click', function() {
+            gridColor = (this.checked) ? '#eef' : null;
+            drawBoard();
+        })
 
         canvas.addEventListener('click', pickColor);
     }
