@@ -209,7 +209,11 @@
     }
 
     function run() {
+        if (running) {
+            clearInterval(running);
+        }
         running = setInterval(step, runDelayMillis);
+        document.getElementById("RunControl").innerText = "Stop";
     }
 
     function stop() {
@@ -217,6 +221,7 @@
             clearInterval(running);
             running = null;
         }
+        document.getElementById("RunControl").innerText = "Run";
     }
 
     function drawBoard() {
@@ -264,11 +269,9 @@
         document.getElementById("RunControl").addEventListener('click', function() {
             if (running) {
                 stop();
-                this.innerText = "Run";
             }
             else {
                 run();
-                this.innerText = "Stop";
             }
         });
         document.getElementById("FillRandomControl").addEventListener('click', () => {
