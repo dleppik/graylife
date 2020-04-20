@@ -8,6 +8,13 @@
         body {
             font-family: "Helvetica Neue", "Helvetica", "Arial", sans-serif;
         }
+        #LifeBoard {
+            box-shadow: 0 2px 3px #333;
+            margin-bottom: 1em;
+        }
+        #RunControl, #StepControl {
+            min-width: 4em;
+        }
         .pickCell {
             width: 16px;
             height: 16px;
@@ -32,6 +39,7 @@
 
 <div id="LifeControls">
     <button id="StepControl">Step</button>
+    <button id="RunControl">Run</button>
     <button id="FillRandomControl">Fill random</button>
     <button id="ClearControl">Clear</button>
     <select id="AlgorithmControl"></select>
@@ -61,9 +69,10 @@
 
 <script>
 
-    let boardWidth = 50;
-    let boardHeight = 25;
-    let boardScale = 10;
+    let boardWidth = 200;
+    let boardHeight = 100;
+    let boardScale = 5;
+    let gridColor = null; //'#eef'; // Use null for no grid
 
     // Game of Life functions: return (don't set) a new value
 
@@ -80,31 +89,60 @@
         return 0;
     }
 
-    const smooth1 = (x, y) => {
+    const neighborly = (x, y) => {
+        function alive(value) {
+            return value > 0.25;
+        }
+        const neighbors = cellNeighbors(x, y);
+        let nonzero = neighbors.filter(alive);
+        const nzSorted = nonzero.sort();
+        let value = cellValue(x, y);
+        if (alive(value)) {
+            if (nonzero.length === 2) {
+                return nonzero.sort()[0];
+            }
+            if (nonzero.length === 3) {
+                return nonzero.sort()[2];
+            }
+        }
+        else {
+            if (nonzero.length === 3) {
+                return nonzero.sort()[1];
+            }
+        }
+        return 0;
+    }
+
+    const smooth = (x, y) => {
         const neighbors = cellNeighbors(x, y);
         let sum = 0;
         neighbors.forEach(value => {sum += value});
 
-        if (cellValue(x, y) <= 0) {
+        let dist;
+        if (cellValue(x, y) <= 0.0001) {
             if (sum < 2.5 || sum > 3.5) {
                 return 0;
             }
-            const dist = sum-3;
-            return 1 - Math.abs(dist);
+            dist = Math.abs(sum - 3);
         }
-        if (sum < 1.5 || sum > 3.5) {
-            return 0;
+        else {
+            if (sum <= 1 || sum >= 4) {
+                return 0;
+            }
+            dist = (sum >= 2 && sum <= 3) ? 0 : Math.abs(sum - 2.5) * 2;
         }
-        const dist = (sum - 2) / 2;
-        return 1 - Math.abs(dist);
+        const result = Math.max(0, Math.min(1, 1 - Math.abs(dist)));
+        console.log(`(${x}, ${y}) with`, cellValue(x,y), '->', result, 'dist = ', dist, cellValue(x,y), neighbors);
+        return result;
     }
 
     let algorithms = {
+        "Neighborly": neighborly,
         "Conway's Life": simpleLife,
-        "Smooth": smooth1
+        "Gradient": smooth,
     }
 
-    let algorithmName = "Conway's Life";
+    let algorithmName = "Neighborly";
     let newCellValue = algorithms[algorithmName];
 
     // Simulator
@@ -162,17 +200,31 @@
 
     let canvas = null;
     let context = null;
+    let running = null;
+    let runDelayMillis = 100;
 
     function step() {
         update();
         drawBoard();
     }
 
-    function drawBoard() {
-        context.fillStyle = 'black';
-        context.fill();
+    function run() {
+        running = setInterval(step, runDelayMillis);
+    }
 
-        context.imageSmoothingEnabled = false;
+    function stop() {
+        if (running) {
+            clearInterval(running);
+            running = null;
+        }
+    }
+
+    function drawBoard() {
+        if (gridColor) {
+            context.fillStyle = gridColor;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
         for (let x=0; x < boardWidth; x++) {
             for (let y=0; y < boardHeight; y++) {
                 drawPixel(cellValue(x, y), x, y);
@@ -185,11 +237,10 @@
         return `rgb(${color}, ${color}, ${color})`;
     }
 
-    function valueForColor(redValue) { return (255 - redValue) / 255; }
-
     function drawPixel(value, x, y) {
+        const size = gridColor ? boardScale - 1 : boardScale;
         context.fillStyle = pixelStyle(value);
-        context.fillRect(x*boardScale, y*boardScale, boardScale-1, boardScale-1);
+        context.fillRect(x*boardScale, y*boardScale, size, size);
     }
 
     // Init
@@ -206,7 +257,20 @@
         initColorPicker(9);
         initAlgorithmSelector();
 
-        document.getElementById("StepControl").addEventListener('click', step);
+        document.getElementById("StepControl").addEventListener('click', () => {
+            stop();
+            step();
+        });
+        document.getElementById("RunControl").addEventListener('click', function() {
+            if (running) {
+                stop();
+                this.innerText = "Run";
+            }
+            else {
+                run();
+                this.innerText = "Stop";
+            }
+        });
         document.getElementById("FillRandomControl").addEventListener('click', () => {
             fillRandom();
             drawBoard();
@@ -229,7 +293,7 @@
         newCellValue = a;
 
         const el = document.getElementById("AlgorithmControl");
-        Array.of(el.children).forEach((opt, i) => {
+        Array.from(el.children).forEach((opt, i) => {
             if (opt.value === name) {
                 el.selectedIndex = i;
             }
