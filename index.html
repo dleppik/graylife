@@ -71,9 +71,9 @@
 
 <script>
 
-    let boardWidth = 200;
-    let boardHeight = 100;
-    let boardScale = 5;
+    let boardWidth = 400;
+    let boardHeight = 200;
+    let boardScale = 3;
     let gridColor = null;
 
     // Game of Life functions: return (don't set) a new value
@@ -93,23 +93,22 @@
 
     const neighborly = (x, y) => {
         function alive(value) {
-            return value > 0.25;
+            return value > 0.125;
         }
         const neighbors = cellNeighbors(x, y);
-        let nonzero = neighbors.filter(alive);
-        const nzSorted = nonzero.sort();
+        let livingNeighbors = neighbors.filter(alive);
         let value = cellValue(x, y);
         if (alive(value)) {
-            if (nonzero.length === 2) {
-                return nonzero.sort()[0];
+            if (livingNeighbors.length === 2) {
+                return livingNeighbors.sort()[0];
             }
-            if (nonzero.length === 3) {
-                return nonzero.sort()[2];
+            if (livingNeighbors.length === 3) {
+                return livingNeighbors.sort()[2];
             }
         }
         else {
-            if (nonzero.length === 3) {
-                return nonzero.sort()[1];
+            if (livingNeighbors.length === 3) {
+                return livingNeighbors.sort()[1];
             }
         }
         return 0;
@@ -195,8 +194,30 @@
         nextBoard = swap;
     }
 
-    function fillRandom() { update(() => Math.random()) }
+    function fillRandom() { update(() => Math.random() < 0.75 ? 0 : Math.random() ) }
     function clearBoard() { update(() => 0) }
+
+    function fillImage(url) {
+        const image = new Image();
+        image.src = url;
+        image.onload = function() {
+            const imageCanvas = document.createElement("canvas");
+            imageCanvas.width = image.width;
+            imageCanvas.height = image.height;
+            const ic = imageCanvas.getContext("2d");
+            ic.drawImage(image, 0,0);
+            const data = ic.getImageData(0, 0, imageCanvas.width, imageCanvas.height);
+
+            for (let x=0; x < Math.min(imageCanvas.width, boardWidth); x++) {
+                for (let y=0; y < Math.min(imageCanvas.height, boardHeight); y++) {
+                    const red = data.data[y * (image.width * 4) + x * 4];
+                    const value = 1 - (red / 255);
+                    setCurrentValue(x, y, value);
+                }
+            }
+            drawBoard();
+        }
+    }
 
     // UI
 
@@ -284,9 +305,6 @@
         canvas.height = boardHeight * boardScale;
         context = canvas.getContext('2d');
 
-        fillRandom();
-        drawBoard();
-
         initColorPicker(9);
         initAlgorithmSelector();
 
@@ -314,8 +332,11 @@
             gridColor = (this.checked) ? '#eef' : null;
             drawBoard();
         })
-
         canvas.addEventListener('click', pickColor);
+        fillImage("Rhino.png");
+        // fillImage("PtolemaicSystem.png");
+        //fillImage("InvertedJenny.png");
+        //fillImage("CatDeposit-200x200.png");
     }
 
     function selectAlgorithm(name) {
