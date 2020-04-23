@@ -12,8 +12,17 @@
             box-shadow: 0 2px 3px #333;
             margin-bottom: 1em;
         }
+        #LifeControls {
+            font-size: 12px;
+        }
+        #LifeControls > div {
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
         #RunControl, #StepControl {
-            min-width: 4em;
+            width: 12em;
+            height: 4em;
+            padding-right: 1em;
         }
         .pickCell {
             width: 16px;
@@ -38,17 +47,25 @@
 <canvas id="LifeBoard"></canvas>
 
 <div id="LifeControls">
-    <button id="StepControl">Step</button>
-    <button id="RunControl">Run</button>
-    <button id="FillRandomControl">Fill random</button>
-    <button id="ClearControl">Clear</button>
-    <select id="AlgorithmControl"></select>
-    <label><input id="GridControl" type="checkbox">Grid</label>
-
-
-    <div style="margin-top: 1em">
-        <div id="ColorPicker">
-        </div>
+    <div>
+        <button id="RunControl">Run</button>
+        <button id="StepControl">Step</button>
+    </div>
+    <div>
+        <label><input id="GridControl" type="checkbox">Grid</label>
+    </div>
+    <div>
+        <label>Algorithm: <select id="AlgorithmControl"></select></label>
+    </div>
+    <div>
+        <div id="ColorPicker"></div>
+    </div>
+    <div>
+        <button id="FillRandomControl">Fill random</button>
+        <button id="ClearControl">Clear</button>
+    </div>
+    <div>
+        <label>Preset: <select id="PresetControl"></select></label>
     </div>
 
 </div>
@@ -74,7 +91,19 @@
     let boardWidth = 400;
     let boardHeight = 200;
     let boardScale = 3;
-    let gridColor = null;
+    let gridColor = '#eef';
+    let showGrid = false;
+
+    const randomFill = () => Math.random() < 0.75 ? 0 : Math.random();
+    const presets = [
+        {name: "Rhino",            width: 400, height: 200, scale:  2, image: "Rhino.png"},
+        {name: "Inverted Jenny",   width: 200, height: 200, scale:  2, image: "InvertedJenny.png"},
+        {name: "Cat Deposit",      width: 200, height: 200, scale:  2, image: "CatDeposit-200x200.png"},
+        {name: "Ptolemaic System", width: 200, height: 200, scale:  2, image: "PtolemaicSystem.png"},
+        {name: "Small Random",     width:  30, height:  30, scale: 10, init: randomFill },
+        {name: "Large Random",     width: 400, height: 200, scale:  2, init: randomFill },
+    ]
+    let preset = presets.find(it => it.name === 'Small Random');
 
     // Game of Life functions: return (don't set) a new value
 
@@ -100,15 +129,15 @@
         let value = cellValue(x, y);
         if (alive(value)) {
             if (livingNeighbors.length === 2) {
-                return livingNeighbors.sort()[0];
+                return livingNeighbors.sort()[0]; // Choose lowest value (lightest)
             }
             if (livingNeighbors.length === 3) {
-                return livingNeighbors.sort()[2];
+                return livingNeighbors.sort()[2]; // Choose highest value (brightest)
             }
         }
         else {
             if (livingNeighbors.length === 3) {
-                return livingNeighbors.sort()[1];
+                return livingNeighbors.sort()[1]; // Choose middle value
             }
         }
         return 0;
@@ -194,7 +223,7 @@
         nextBoard = swap;
     }
 
-    function fillRandom() { update(() => Math.random() < 0.75 ? 0 : Math.random() ) }
+    function fillRandom() { update(randomFill) }
     function clearBoard() { update(() => 0) }
 
     function fillImage(url) {
@@ -269,7 +298,7 @@
         context.imageSmoothingEnabled = false;
         context.drawImage(boardScalingCanvas, 0, 0, canvas.width, canvas.height);
 
-        if (gridColor) {
+        if (showGrid) {
             context.strokeStyle = gridColor;
             context.beginPath();
             for (let x=0.5; x< canvas.width; x+= boardScale) {  // 0.5: half pixel to avoid antialiasing
@@ -300,13 +329,11 @@
     // Init
 
     function initLife() {
-        canvas = document.getElementById("LifeBoard");
-        canvas.width = boardWidth * boardScale;
-        canvas.height = boardHeight * boardScale;
-        context = canvas.getContext('2d');
+        loadPreset(preset.name);
 
         initColorPicker(9);
         initAlgorithmSelector();
+        initPresetControl();
 
         document.getElementById("StepControl").addEventListener('click', () => {
             stop();
@@ -329,14 +356,55 @@
             drawBoard();
         });
         document.getElementById("GridControl").addEventListener('click', function() {
-            gridColor = (this.checked) ? '#eef' : null;
+            showGrid = this.checked;
             drawBoard();
         })
         canvas.addEventListener('click', pickColor);
-        fillImage("Rhino.png");
-        // fillImage("PtolemaicSystem.png");
-        //fillImage("InvertedJenny.png");
-        //fillImage("CatDeposit-200x200.png");
+    }
+
+    function initBoard() {
+        canvas = document.getElementById("LifeBoard");
+        canvas.width = boardWidth * boardScale;
+        canvas.height = boardHeight * boardScale;
+        context = canvas.getContext('2d');
+        boardImage = null;
+    }
+
+    function loadPreset(name) {
+        preset = presets.find(it => it.name === name);
+        boardWidth = preset.width;
+        boardHeight = preset.height;
+        boardScale = preset.scale;
+
+        showGrid = boardScale > 2;
+        const gridControl = document.getElementById("GridControl");
+        if (gridControl) {
+            gridControl.checked = showGrid;
+        }
+
+        initBoard();
+
+        if (preset.image) {
+            fillImage(preset.image);
+        }
+        if (preset.init) {
+            update(preset.init);
+            drawBoard();
+        }
+    }
+
+    function initPresetControl() {
+        const control = document.getElementById("PresetControl");
+        let html = '';
+        presets.forEach(p => {
+            const selected = (p.name === preset.name) ? ' selected ' : '';
+            html += `<option value="${p.name}" ${selected}>${p.name}</option>`
+        });
+        control.innerHTML = html;
+        control.addEventListener('change', (e) => {
+            clearBoard();
+            loadPreset(e.target.value);
+        });
     }
 
     function selectAlgorithm(name) {
